@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -20,8 +21,7 @@ public class PlayerColor
 
 public class GameController : MonoBehaviour
 {
-    public Text[] buttonList;
-    
+    public Text[] board;
     public GameObject gameOverPanel;
     public Text gameOverText;
 
@@ -39,43 +39,140 @@ public class GameController : MonoBehaviour
     private string playerSide;
     private string computerSide;
     public bool playerMove;
-    public float delay;
     private int value;
 
-
+    private string[] boardClone;
+    private int score;
+    private int scoreMax;
+    private int scoreMin;
+    private int bestScore = Int32.MinValue;
+    private int bestScoreMax = Int32.MinValue;
+    private int bestScoreMin = Int32.MaxValue;
+    private int bestMove;
+    private bool max = true;
+    private bool min = false;
+    private string emptyChar = "";    
 
     void Awake()
     {
         gameOverPanel.SetActive(false);
-        SetGameControllerReferenceOnButtons();        
+        SetGameControllerReferenceOnButtons();
         moveCount = 0;
         restartButton.SetActive(false);
         playerMove = true;
+        boardClone = new string[board.Length];        
     }
 
+
     void Update()
-    {
+    {       
         if (playerMove == false)
         {
-            delay += delay * Time.deltaTime;
-            if (delay >= 20)
+            for (int j = 0; j < board.Length; j++) boardClone[j] = board[j].text;            
+            bestScore = Int32.MinValue;            
+
+            for (int i = 0; i < board.Length; i++)
             {
-                value = Random.Range(0, 8);
-                if (buttonList[value].GetComponentInParent<Button>().interactable == true)
+                if (boardClone[i] == emptyChar)
                 {
-                    buttonList[value].text = GetComputerSide();
-                    buttonList[value].GetComponentInParent<Button>().interactable = false;
-                    EndTurn();
+                    boardClone[i] = computerSide;                    
+                    score = MinMax(boardClone, 0, min);
+                    boardClone[i] = emptyChar;
+
+                    if (score > bestScore)
+                    {
+                        bestScore = score;                        
+                        bestMove = i;
+                        Debug.Log("bestScore=" + bestScore + ", bestMove=" + bestMove);
+                    }
                 }
+            }
+            
+            board[bestMove].text = GetComputerSide();
+            board[bestMove].GetComponentInParent<Button>().interactable = false;
+
+            EndTurn();
+        }        
+    }
+
+    public bool checkBoard(string[] boardCloneMM, string player)
+    {
+       if ((boardCloneMM[0] == player && boardCloneMM[1] == player && boardCloneMM[2] == player) ||
+           (boardCloneMM[3] == player && boardCloneMM[4] == player && boardCloneMM[5] == player) ||
+           (boardCloneMM[6] == player && boardCloneMM[7] == player && boardCloneMM[8] == player) ||
+           (boardCloneMM[0] == player && boardCloneMM[3] == player && boardCloneMM[6] == player) ||
+           (boardCloneMM[1] == player && boardCloneMM[4] == player && boardCloneMM[7] == player) ||
+           (boardCloneMM[2] == player && boardCloneMM[5] == player && boardCloneMM[8] == player) ||
+           (boardCloneMM[0] == player && boardCloneMM[4] == player && boardCloneMM[8] == player) ||
+           (boardCloneMM[2] == player && boardCloneMM[4] == player && boardCloneMM[6] == player)) return true;
+       else return false;
+    }
+
+    public bool Draw(string[] boardCloneMM)
+    {
+        bool draw;
+        int a = 0;
+        for (int i = 0; i < board.Length; i++)
+        {
+            if (boardCloneMM[i] == emptyChar) a++;
+        }
+        if (a == 0) draw = true;
+        else draw = false;
+        
+        return draw;        
+    }
+
+    public int MinMax(string[] boardCloneMM, int depth, bool isMaximizing)
+    {
+        if (checkBoard(boardCloneMM, computerSide) == true) return (10 - depth);
+        else if (checkBoard(boardCloneMM, playerSide) == true) return (depth - 10);
+        else if (Draw(boardCloneMM) == true) return 0;
+
+        else
+        {
+            if (isMaximizing)
+            {
+                bestScoreMax = Int32.MinValue;
+
+                for (int i = 0; i < board.Length; i++)
+                {
+                    if (boardCloneMM[i] == emptyChar)
+                    {
+                        boardCloneMM[i] = computerSide;                       
+                        scoreMax = MinMax(boardCloneMM, depth++, min);                        
+                        boardCloneMM[i] = emptyChar;
+                        bestScoreMax = Math.Max(bestScoreMax, scoreMax);
+                        //Debug.Log("scoreMax=" + scoreMax + ", i=" + i);
+                    }
+                }
+                return bestScoreMax;
+            }
+            else
+            {
+                bestScoreMin = Int32.MaxValue;
+
+                for (int i = 0; i < board.Length; i++)
+                {
+                    if (boardCloneMM[i] == emptyChar)
+                    {
+                        boardCloneMM[i] = playerSide;                        
+                        scoreMin = MinMax(boardCloneMM, depth++, max);
+                        boardCloneMM[i] = emptyChar;
+                        bestScoreMin = Math.Min(bestScoreMin, scoreMin);
+                        //Debug.Log("scoreMin=" + scoreMin + ", i=" + i);
+                    }
+                }
+                return bestScoreMin;
             }
         }
     }
 
+
     public void SetGameControllerReferenceOnButtons()
     {
-        for (int i = 0; i < buttonList.Length; i++)
+        for (int i = 0; i < board.Length; i++)
         {
-            buttonList[i].GetComponentInParent<GridSpace>().SetGameControllerReference(this);
+            board[i].GetComponentInParent<GridSpace>().SetGameControllerReference(this);
         }
     }
 
@@ -85,11 +182,13 @@ public class GameController : MonoBehaviour
         if (playerSide == "X")
         {
             computerSide = "O";
+            playerMove = true;
             SetPlayerColors(playerX, playerO);
         }
         else
         {
-            computerSide = "X";
+            computerSide = "X";            
+            playerMove = false;
             SetPlayerColors(playerO, playerX);
         }
 
@@ -117,68 +216,68 @@ public class GameController : MonoBehaviour
     {
         moveCount++;
 
-        if (buttonList[0].text == playerSide && buttonList[1].text == playerSide && buttonList[2].text == playerSide)
+        if (board[0].text == playerSide && board[1].text == playerSide && board[2].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[3].text == playerSide && buttonList[4].text == playerSide && buttonList[5].text == playerSide)
+        else if (board[3].text == playerSide && board[4].text == playerSide && board[5].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[6].text == playerSide && buttonList[7].text == playerSide && buttonList[8].text == playerSide)
+        else if (board[6].text == playerSide && board[7].text == playerSide && board[8].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[0].text == playerSide && buttonList[3].text == playerSide && buttonList[6].text == playerSide)
+        else if (board[0].text == playerSide && board[3].text == playerSide && board[6].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[1].text == playerSide && buttonList[4].text == playerSide && buttonList[7].text == playerSide)
+        else if (board[1].text == playerSide && board[4].text == playerSide && board[7].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[2].text == playerSide && buttonList[5].text == playerSide && buttonList[8].text == playerSide)
+        else if (board[2].text == playerSide && board[5].text == playerSide && board[8].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[0].text == playerSide && buttonList[4].text == playerSide && buttonList[8].text == playerSide)
+        else if (board[0].text == playerSide && board[4].text == playerSide && board[8].text == playerSide)
         {
             GameOver(playerSide);
         }
-        else if (buttonList[2].text == playerSide && buttonList[4].text == playerSide && buttonList[6].text == playerSide)
+        else if (board[2].text == playerSide && board[4].text == playerSide && board[6].text == playerSide)
         {
             GameOver(playerSide);
         }
 
-        else if (buttonList[0].text == computerSide && buttonList[1].text == computerSide && buttonList[2].text == computerSide)
+        else if (board[0].text == computerSide && board[1].text == computerSide && board[2].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[3].text == computerSide && buttonList[4].text == computerSide && buttonList[5].text == computerSide)
+        else if (board[3].text == computerSide && board[4].text == computerSide && board[5].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[6].text == computerSide && buttonList[7].text == computerSide && buttonList[8].text == computerSide)
+        else if (board[6].text == computerSide && board[7].text == computerSide && board[8].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[0].text == computerSide && buttonList[3].text == computerSide && buttonList[6].text == computerSide)
+        else if (board[0].text == computerSide && board[3].text == computerSide && board[6].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[1].text == computerSide && buttonList[4].text == computerSide && buttonList[7].text == computerSide)
+        else if (board[1].text == computerSide && board[4].text == computerSide && board[7].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[2].text == computerSide && buttonList[5].text == computerSide && buttonList[8].text == computerSide)
+        else if (board[2].text == computerSide && board[5].text == computerSide && board[8].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[0].text == computerSide && buttonList[4].text == computerSide && buttonList[8].text == computerSide)
+        else if (board[0].text == computerSide && board[4].text == computerSide && board[8].text == computerSide)
         {
             GameOver(computerSide);
         }
-        else if (buttonList[2].text == computerSide && buttonList[4].text == computerSide && buttonList[6].text == computerSide)
+        else if (board[2].text == computerSide && board[4].text == computerSide && board[6].text == computerSide)
         {
             GameOver(computerSide);
         }
@@ -249,19 +348,19 @@ public class GameController : MonoBehaviour
         SetPlayerColorsInactive();
         startInfo.SetActive(true);
         playerMove = true;
-        delay = 10;
 
-        for (int i = 0; i < buttonList.Length; i++)
-        {           
-            buttonList[i].text = "";
+        for (int i = 0; i < board.Length; i++)
+        {
+            board[i].text = emptyChar;
+            boardClone[i] = emptyChar;
         }
     }
 
     void SetBoardInteractable(bool toggle)
     {
-        for (int i = 0; i < buttonList.Length; i++)
+        for (int i = 0; i < board.Length; i++)
         {
-            buttonList[i].GetComponentInParent<Button>().interactable = toggle;
+            board[i].GetComponentInParent<Button>().interactable = toggle;
         }
     }
 

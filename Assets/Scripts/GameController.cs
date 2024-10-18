@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -51,7 +52,9 @@ public class GameController : MonoBehaviour
     private int bestMove;
     private bool max = true;
     private bool min = false;
-    private string emptyChar = "";    
+    private string emptyChar = "";
+
+    public int maxSearchDepth = 9; // Установите здесь максимальную глубину поиска
 
     void Awake()
     {
@@ -65,34 +68,42 @@ public class GameController : MonoBehaviour
 
 
     void Update()
-    {       
-        if (playerMove == false)
+    {
+        if (!playerMove)
         {
-            for (int j = 0; j < board.Length; j++) boardClone[j] = board[j].text;            
-            bestScore = Int32.MinValue;            
-
-            for (int i = 0; i < board.Length; i++)
+            int bestMoveIndex = FindBestMove();
+            if (bestMoveIndex != -1)
             {
-                if (boardClone[i] == emptyChar)
-                {
-                    boardClone[i] = computerSide;                    
-                    score = MinMax(boardClone, 0, min);
-                    boardClone[i] = emptyChar;
-
-                    if (score > bestScore)
-                    {
-                        bestScore = score;                        
-                        bestMove = i;
-                        Debug.Log("bestScore=" + bestScore + ", bestMove=" + bestMove);
-                    }
-                }
+                board[bestMoveIndex].text = GetComputerSide();
+                board[bestMoveIndex].GetComponentInParent<Button>().interactable = false;
             }
-            
-            board[bestMove].text = GetComputerSide();
-            board[bestMove].GetComponentInParent<Button>().interactable = false;
 
             EndTurn();
-        }        
+        }
+    }
+
+    public int FindBestMove()
+    {
+        int bestScore = int.MinValue;
+        int bestMove = -1;
+
+        for (int i = 0; i < board.Length; i++)
+        {
+            if (board[i].text == emptyChar)
+            {
+                board[i].text = computerSide;
+                int score = Minimax(board.Select(x => x.text).ToArray(), 0, false, int.MinValue, int.MaxValue);
+                board[i].text = emptyChar;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMove = i;
+                }
+            }
+        }
+
+        return bestMove;
     }
 
     public bool checkBoard(string[] boardCloneMM, string player)
@@ -122,53 +133,68 @@ public class GameController : MonoBehaviour
         return draw;        
     }
 
-    public int MinMax(string[] boardCloneMM, int depth, bool isMaximizing)
+    // Функция Minimax с адаптивной глубиной
+    public int Minimax(string[] boardCloneMM, int depth, bool isMaximizing, int alpha, int beta)
     {
-        if (checkBoard(boardCloneMM, computerSide) == true) return (10 - depth);
-        else if (checkBoard(boardCloneMM, playerSide) == true) return (depth - 10);
-        else if (Draw(boardCloneMM) == true) return 0;
+        // Проверка на выигрыш, проигрыш или ничью
+        if (checkBoard(boardCloneMM, computerSide))
+            return 10 - depth;
+        else if (checkBoard(boardCloneMM, playerSide))
+            return depth - 10;
+        else if (Draw(boardCloneMM))
+            return 0;
 
+        // Вычисление оставшихся пустых клеток на доске
+        int emptyCells = 0;
+        foreach (string cell in boardCloneMM)
+        {
+            if (cell == emptyChar)
+                emptyCells++;
+        }
+
+        // Адаптивное определение глубины в зависимости от оставшихся пустых клеток
+        int maxDepth = Mathf.Clamp(emptyCells, 1, maxSearchDepth);
+
+        if (isMaximizing)
+        {
+            int bestScore = int.MinValue;
+            for (int i = 0; i < board.Length; i++)
+            {
+                if (boardCloneMM[i] == emptyChar)
+                {
+                    boardCloneMM[i] = computerSide;
+                    int score = Minimax(boardCloneMM, depth + 1, false, alpha, beta);
+                    boardCloneMM[i] = emptyChar;
+                    bestScore = Mathf.Max(bestScore, score);
+                    alpha = Mathf.Max(alpha, bestScore);
+                    if (beta <= alpha)
+                        break;
+                }
+            }
+            return bestScore;
+        }
         else
         {
-            if (isMaximizing)
+            int bestScore = int.MaxValue;
+            for (int i = 0; i < board.Length; i++)
             {
-                bestScoreMax = Int32.MinValue;
-
-                for (int i = 0; i < board.Length; i++)
+                if (boardCloneMM[i] == emptyChar)
                 {
-                    if (boardCloneMM[i] == emptyChar)
-                    {
-                        boardCloneMM[i] = computerSide;                       
-                        scoreMax = MinMax(boardCloneMM, depth++, min);                        
-                        boardCloneMM[i] = emptyChar;
-                        bestScoreMax = Math.Max(bestScoreMax, scoreMax);
-                        //Debug.Log("scoreMax=" + scoreMax + ", i=" + i);
-                    }
+                    boardCloneMM[i] = playerSide;
+                    int score = Minimax(boardCloneMM, depth + 1, true, alpha, beta);
+                    boardCloneMM[i] = emptyChar;
+                    bestScore = Mathf.Min(bestScore, score);
+                    beta = Mathf.Min(beta, bestScore);
+                    if (beta <= alpha)
+                        break;
                 }
-                return bestScoreMax;
             }
-            else
-            {
-                bestScoreMin = Int32.MaxValue;
-
-                for (int i = 0; i < board.Length; i++)
-                {
-                    if (boardCloneMM[i] == emptyChar)
-                    {
-                        boardCloneMM[i] = playerSide;                        
-                        scoreMin = MinMax(boardCloneMM, depth++, max);
-                        boardCloneMM[i] = emptyChar;
-                        bestScoreMin = Math.Min(bestScoreMin, scoreMin);
-                        //Debug.Log("scoreMin=" + scoreMin + ", i=" + i);
-                    }
-                }
-                return bestScoreMin;
-            }
+            return bestScore;
         }
     }
 
 
-    public void SetGameControllerReferenceOnButtons()
+public void SetGameControllerReferenceOnButtons()
     {
         for (int i = 0; i < board.Length; i++)
         {
